@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuizDoc → CSV Converter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+  :root{--ink:#0a0a0f;--paper:#f5f2eb;--accent:#e8401c;--accent2:#2d6be4;--muted:#8a8680;--card:#ffffff;--border:#ddd9d0;--success:#1a7a4a;--success-bg:#e8f5ee;}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Mono',monospace;background:var(--paper);color:var(--ink);min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23b5b0a8' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");pointer-events:none;z-index:0;}
+  .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:40px 24px 80px;}
+  header{margin-bottom:48px;}
+  .badge{display:inline-block;font-size:10px;font-weight:500;letter-spacing:.15em;text-transform:uppercase;background:var(--accent);color:white;padding:4px 10px;border-radius:2px;margin-bottom:16px;}
+  h1{font-family:'Syne',sans-serif;font-size:clamp(2.2rem,6vw,3.6rem);font-weight:800;line-height:1.05;letter-spacing:-.02em;}
+  h1 span{color:var(--accent);}
+  .subtitle{margin-top:12px;font-size:13px;color:var(--muted);line-height:1.6;max-width:520px;}
+  .format-card{background:var(--ink);color:var(--paper);border-radius:8px;padding:18px 22px;margin-bottom:28px;font-size:11px;line-height:1.8;}
+  .format-card h3{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}
+  .format-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px 16px;}
+  .format-item{display:flex;gap:8px;}
+  .format-key{color:#8a8680;min-width:20px;}
+  .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:52px 32px;text-align:center;background:var(--card);cursor:pointer;transition:all .2s ease;margin-bottom:20px;position:relative;overflow:hidden;}
+  .drop-zone::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(232,64,28,.03) 0%,rgba(45,107,228,.03) 100%);opacity:0;transition:opacity .2s;}
+  .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:#fff8f6;}
+  .drop-zone:hover::before,.drop-zone.drag-over::before{opacity:1;}
+  .drop-zone.drag-over{transform:scale(1.01);}
+  .drop-icon{width:52px;height:52px;margin:0 auto 14px;background:linear-gradient(135deg,#fff0ed,#e8f0ff);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;}
+  .drop-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:5px;}
+  .drop-sub{font-size:12px;color:var(--muted);}
+  .drop-sub strong{color:var(--accent2);cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
+  #fileInput{display:none;}
+  .file-info{display:none;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:20px;animation:slideIn .3s ease;}
+  .file-info.show{display:flex;}
+  .file-icon{font-size:20px;}
+  .file-name{font-size:13px;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .file-size{font-size:11px;color:var(--muted);}
+  .file-remove{background:none;border:none;cursor:pointer;color:var(--muted);font-size:17px;padding:2px 6px;border-radius:4px;transition:color .15s;}
+  .file-remove:hover{color:var(--accent);}
+  .config-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+  @media(max-width:500px){.config-row{grid-template-columns:1fr;}}
+  .config-group{display:flex;flex-direction:column;gap:5px;}
+  .config-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;}
+  .config-select{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:13px;color:var(--ink);cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238a8680' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+  .btn-convert{width:100%;background:var(--accent);color:white;border:none;border-radius:8px;padding:15px 32px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:all .2s ease;position:relative;overflow:hidden;}
+  .btn-convert::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.15),transparent);}
+  .btn-convert:hover:not(:disabled){background:#c8341a;transform:translateY(-1px);box-shadow:0 6px 20px rgba(232,64,28,.35);}
+  .btn-convert:disabled{opacity:.45;cursor:not-allowed;}
+  .progress-wrap{display:none;margin-top:18px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:18px 22px;animation:slideIn .3s ease;}
+  .progress-wrap.show{display:block;}
+  .progress-label{font-size:12px;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;}
+  .progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .35s ease;width:0%;}
+  .progress-steps{margin-top:12px;display:flex;flex-direction:column;gap:5px;}
+  .progress-step{font-size:11px;display:flex;align-items:center;gap:8px;color:var(--muted);transition:color .2s;}
+  .progress-step.active{color:var(--ink);}
+  .progress-step.done{color:var(--success);}
+  .step-icon{font-size:13px;}
+  .result-card{display:none;background:var(--success-bg);border:1px solid #b2d8c4;border-radius:8px;padding:18px 22px;margin-top:18px;animation:slideIn .3s ease;}
+  .result-card.show{display:block;}
+  .result-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .result-icon{font-size:20px;}
+  .result-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--success);}
+  .result-stats{display:flex;gap:20px;margin-bottom:14px;flex-wrap:wrap;}
+  .stat{font-size:11px;}
+  .stat-val{font-size:18px;font-family:'Syne',sans-serif;font-weight:800;color:var(--ink);display:block;}
+  .stat-lbl{color:var(--muted);}
+  .btn-download{background:var(--success);color:white;border:none;border-radius:6px;padding:11px 22px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:8px;}
+  .btn-download:hover{background:#155e39;transform:translateY(-1px);}
+  .warn-card{display:none;background:#fffbe6;border:1px solid #f0d060;border-radius:8px;padding:14px 18px;margin-top:14px;font-size:12px;color:#7a5f00;animation:slideIn .3s ease;line-height:1.7;white-space:pre-wrap;}
+  .warn-card.show{display:block;}
+  .preview-wrap{display:none;margin-top:18px;background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;animation:slideIn .3s ease;}
+  .preview-wrap.show{display:block;}
+  .preview-header{padding:11px 16px;background:var(--ink);color:var(--paper);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;}
+  .preview-count{font-family:'DM Mono',monospace;font-weight:400;color:var(--muted);}
+  .preview-scroll{overflow-x:auto;max-height:360px;overflow-y:auto;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f0ede6;font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:10px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1;}
+  td{padding:6px 10px;border-bottom:1px solid #f0ede6;color:var(--ink);vertical-align:top;}
+  td.q-cell{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  td.opt-cell{max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:#fafaf8;}
+  .correct-badge{background:var(--success-bg);color:var(--success);padding:2px 7px;border-radius:3px;font-size:10px;font-weight:600;}
+  .missing-badge{background:#f5f0e8;color:var(--muted);padding:2px 7px;border-radius:3px;font-size:10px;}
+  .error-card{display:none;background:#fff0ed;border:1px solid #f5c0b0;border-radius:8px;padding:14px 18px;margin-top:14px;font-size:12px;color:#c0392b;white-space:pre-wrap;animation:slideIn .3s ease;}
+  .error-card.show{display:block;}
+  @keyframes slideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  .instructions{margin-top:48px;border-top:1px solid var(--border);padding-top:28px;}
+  .instructions h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;color:var(--muted);}
+  .steps-list{display:flex;flex-direction:column;gap:9px;}
+  .step-item{display:flex;gap:12px;font-size:12px;line-height:1.6;}
+  .step-num{min-width:20px;height:20px;background:var(--ink);color:var(--paper);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px;}
+  code{background:#f0ede6;padding:1px 5px;border-radius:3px;font-size:11px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">School Portal Tool</div>
+    <h1>QuizDoc<br><span>&#8594; CSV</span></h1>
+    <p class="subtitle">Upload a Word document with numbered quiz questions and lettered options. Option labels (A, B, C&#8230;) are stripped. Correct answers read from underlines or answer key. Missing answers left blank.</p>
+  </header>
+  <div class="format-card">
+    <h3>Output CSV Column Order</h3>
+    <div class="format-grid">
+      <div class="format-item"><span class="format-key">A</span><span>Serial number</span></div>
+      <div class="format-item"><span class="format-key">B</span><span>Question type &#8594; singlechoice</span></div>
+      <div class="format-item"><span class="format-key">C</span><span>Level &#8594; high</span></div>
+      <div class="format-item"><span class="format-key">D</span><span>Question text</span></div>
+      <div class="format-item"><span class="format-key">E</span><span>opt_a</span></div>
+      <div class="format-item"><span class="format-key">F</span><span>opt_b</span></div>
+      <div class="format-item"><span class="format-key">G</span><span>opt_c</span></div>
+      <div class="format-item"><span class="format-key">H</span><span>opt_d</span></div>
+      <div class="format-item"><span class="format-key">I</span><span>opt_e</span></div>
+      <div class="format-item"><span class="format-key">J</span><span>correct &#8594; opt_a&#8230;opt_e or blank</span></div>
+    </div>
+  </div>
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-icon">&#128196;</div>
+    <div class="drop-title">Drop your Word document here</div>
+    <p class="drop-sub">or <strong onclick="document.getElementById('fileInput').click()">browse to upload</strong></p>
+    <p class="drop-sub" style="margin-top:5px;">.docx files only</p>
+  </div>
+  <input type="file" id="fileInput" accept=".docx">
+  <div class="file-info" id="fileInfo">
+    <span class="file-icon">&#128221;</span>
+    <span class="file-name" id="fileName"></span>
+    <span class="file-size" id="fileSize"></span>
+    <button class="file-remove" id="removeFile" title="Remove">&#10005;</button>
+  </div>
+  <div class="config-row">
+    <div class="config-group">
+      <label class="config-label">Question Type</label>
+      <select class="config-select" id="qType">
+        <option value="singlechoice">singlechoice</option>
+        <option value="multichoice">multichoice</option>
+      </select>
+    </div>
+    <div class="config-group">
+      <label class="config-label">Level</label>
+      <select class="config-select" id="qLevel">
+        <option value="high">high</option>
+        <option value="medium">medium</option>
+        <option value="low">low</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn-convert" id="convertBtn" disabled>Convert to CSV</button>
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label"><span id="progressText">Processing&#8230;</span><span id="progressPct">0%</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-steps">
+      <div class="progress-step" id="step1"><span class="step-icon">&#9203;</span> Reading Word document</div>
+      <div class="progress-step" id="step2"><span class="step-icon">&#9203;</span> Extracting questions &amp; options</div>
+      <div class="progress-step" id="step3"><span class="step-icon">&#9203;</span> Detecting correct answers</div>
+      <div class="progress-step" id="step4"><span class="step-icon">&#9203;</span> Building CSV</div>
+    </div>
+  </div>
+  <div class="error-card" id="errorCard"></div>
+  <div class="result-card" id="resultCard">
+    <div class="result-header"><span class="result-icon">&#9989;</span><span class="result-title">Conversion Complete</span></div>
+    <div class="result-stats">
+      <div class="stat"><span class="stat-val" id="statQ">0</span><span class="stat-lbl">questions</span></div>
+      <div class="stat"><span class="stat-val" id="statC">0</span><span class="stat-lbl">answers detected</span></div>
+      <div class="stat"><span class="stat-val" id="statM">0</span><span class="stat-lbl">answers missing (blank)</span></div>
+    </div>
+    <button class="btn-download" id="downloadBtn">&#8659; Download .csv</button>
+  </div>
+  <div class="warn-card" id="warnCard"></div>
+  <div class="preview-wrap" id="previewWrap">
+    <div class="preview-header"><span>Preview</span><span class="preview-count" id="previewCount"></span></div>
+    <div class="preview-scroll"><table id="previewTable"></table></div>
+  </div>
+  <div class="instructions">
+    <h3>Document Format Guide</h3>
+    <div class="steps-list">
+      <div class="step-item"><div class="step-num">1</div><div>Number questions: <code>1. text</code> or <code>1) text</code></div></div>
+      <div class="step-item"><div class="step-num">2</div><div>Options on separate lines: <code>A. text</code> / <code>A) text</code> / <code>(A) text</code> &#8212; labels stripped automatically.</div></div>
+      <div class="step-item"><div class="step-num">3</div><div>Options can share one line: <code>(A) cat (B) dog (C) fish (D) bird</code> &#8212; split automatically.</div></div>
+      <div class="step-item"><div class="step-num">4</div><div><strong>Correct answer &#8212; underline:</strong> Underline the correct option in Word. Detected automatically.</div></div>
+      <div class="step-item"><div class="step-num">5</div><div><strong>Correct answer &#8212; answer key:</strong> Include <code>1. B  2. C  3. A</code> anywhere, or under a heading like <code>Answers:</code> / <code>Answer Key</code></div></div>
+      <div class="step-item"><div class="step-num">6</div><div>If no correct answer found, the correct column is <strong>left blank</strong>.</div></div>
+    </div>
+  </div>
+</div>
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  QUIZ DOC → CSV  v5  —  Structural parser  +  Claude AI answer layer
+//
+//  Pipeline:
+//    1. mammoth  →  HTML (with <u> tags) + raw plain text
+//    2. JS structural parser  →  extracts all questions, options, answers
+//       (handles underlines, all answer-key formats via broad regexes)
+//    3. IF any questions still lack a correct answer:
+//       Claude API  →  reads full document text + remaining questions,
+//       returns JSON map  { "qNum": "opt_x" }  for every missing answer
+//    4. Build CSV — blank cell only if AI also couldn't find the answer
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── DOM refs ──────────────────────────────────────────────────────────────
+const dropZone    = document.getElementById('dropZone');
+const fileInput   = document.getElementById('fileInput');
+const fileInfo    = document.getElementById('fileInfo');
+const fileName    = document.getElementById('fileName');
+const fileSize    = document.getElementById('fileSize');
+const removeFile  = document.getElementById('removeFile');
+const convertBtn  = document.getElementById('convertBtn');
+const progressWrap= document.getElementById('progressWrap');
+const progressFill= document.getElementById('progressFill');
+const progressPct = document.getElementById('progressPct');
+const progressText= document.getElementById('progressText');
+const errorCard   = document.getElementById('errorCard');
+const resultCard  = document.getElementById('resultCard');
+const warnCard    = document.getElementById('warnCard');
+const previewWrap = document.getElementById('previewWrap');
+const downloadBtn = document.getElementById('downloadBtn');
+let currentFile=null, csvData=null, parsedRows=[];
+
+// ── File handling ─────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',e=>{
+  e.preventDefault();dropZone.classList.remove('drag-over');
+  const f=e.dataTransfer.files[0];if(f)handleFile(f);
+});
+dropZone.addEventListener('click',()=>fileInput.click());
+fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileInput.files[0]);});
+removeFile.addEventListener('click',()=>{
+  currentFile=null;csvData=null;
+  fileInfo.classList.remove('show');convertBtn.disabled=true;
+  hideAll();fileInput.value='';
+});
+
+function handleFile(f){
+  if(!f.name.toLowerCase().endsWith('.docx')){showError('Please upload a .docx (Word) file.');return;}
+  currentFile=f;
+  fileName.textContent=f.name;
+  fileSize.textContent=fmtSize(f.size);
+  fileInfo.classList.add('show');
+  convertBtn.disabled=false;
+  hideAll();
+}
+function fmtSize(b){return b<1048576?(b/1024).toFixed(1)+'KB':(b/1048576).toFixed(1)+'MB';}
+
+// ── Main convert flow ─────────────────────────────────────────────────────
+convertBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  hideAll();
+  convertBtn.disabled = true;
+  progressWrap.classList.add('show');
+  setProgress(5,'Reading document...'); setStep(1,'active');
+
+  try {
+    const buf = await readBuf(currentFile);
+    setProgress(15);
+
+    // Run mammoth twice: once for HTML (underline detection), once for plain text (AI context)
+    const [htmlResult, textResult] = await Promise.all([
+      mammoth.convertToHtml({ arrayBuffer: buf.slice(0) }, { styleMap: ['u => u'] }),
+      mammoth.extractRawText({ arrayBuffer: buf.slice(0) })
+    ]);
+    const docHtml     = htmlResult.value;
+    const docRawText  = textResult.value;   // full plain text for AI context
+
+    setStep(1,'done'); setStep(2,'active'); setProgress(35,'Extracting questions...');
+
+    const rows = parseDocument(docHtml, docRawText);
+
+    setStep(2,'done'); setStep(3,'active'); setProgress(55,'Detecting answers...');
+
+    // Fill from structural answer key first
+    fillAnswerKey(rows);
+
+    // Count how many are still missing
+    const stillMissing = rows.filter(r => !r.correct);
+
+    if (stillMissing.length > 0) {
+      setProgress(60, `AI resolving ${stillMissing.length} missing answer${stillMissing.length>1?'s':''}...`);
+      try {
+        const aiAnswers = await askClaudeForAnswers(stillMissing, docRawText);
+        // Apply AI answers
+        for (const r of stillMissing) {
+          if (aiAnswers[r.num]) {
+            r.correct = aiAnswers[r.num];
+          }
+        }
+      } catch(aiErr) {
+        // AI failed — log silently, proceed without AI answers
+        console.warn('AI answer detection failed:', aiErr.message);
+      }
+    }
+
+    setStep(3,'done'); setStep(4,'active'); setProgress(88,'Building CSV...');
+
+    const qType  = document.getElementById('qType').value;
+    const qLevel = document.getElementById('qLevel').value;
+    parsedRows = rows;
+    csvData    = buildCsv(rows, qType, qLevel);
+
+    setStep(4,'done'); setProgress(100,'Done!');
+
+    // Stats
+    const got     = rows.filter(r => r.correct).length;
+    const missing = rows.length - got;
+    document.getElementById('statQ').textContent = rows.length;
+    document.getElementById('statC').textContent = got;
+    document.getElementById('statM').textContent = missing;
+    resultCard.classList.add('show');
+
+    if (missing > 0) {
+      const nums = rows.filter(r => !r.correct).map(r => r.num).join(', ');
+      warnCard.textContent =
+        'Warning: ' + missing + ' question' + (missing>1?'s':'') +
+        ' still have no correct answer (even after AI check).\n' +
+        'Their "correct" column will be blank in the CSV.\n' +
+        'Question numbers: ' + nums;
+      warnCard.classList.add('show');
+    }
+
+    renderPreview(rows, qType, qLevel);
+    previewWrap.classList.add('show');
+
+  } catch(err) {
+    showError('Conversion failed:\n' + err.message);
+    console.error(err);
+  }
+  convertBtn.disabled = false;
+});
+
+downloadBtn.addEventListener('click', () => {
+  if (!csvData) return;
+  const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = (currentFile?.name || 'quiz').replace(/\.docx$/i,'') + '.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CLAUDE AI  —  answer detection for questions the parser couldn't solve
+// ═══════════════════════════════════════════════════════════════════════
+
+async function askClaudeForAnswers(missingRows, docRawText) {
+  /*
+   * Build a single prompt that gives Claude:
+   *  1. The full raw document text (so it can read ANY answer key format,
+   *     bold/underline descriptions, inline answers, etc.)
+   *  2. A numbered list of only the questions still needing an answer
+   *  3. Clear instructions to return ONLY a JSON object
+   *
+   * Returns: { questionNumber: "opt_x", ... }
+   */
+
+  // Summarise the missing questions clearly
+  const qList = missingRows.map(r => {
+    const optLines = r.opts
+      .map((o, i) => o ? `  ${String.fromCharCode(65+i)}. ${o}` : null)
+      .filter(Boolean)
+      .join('\n');
+    return `Q${r.num}: ${r.question}\n${optLines}`;
+  }).join('\n\n');
+
+  // Trim raw text to avoid token limits — first 6000 chars is almost always enough
+  const contextText = docRawText.length > 6000
+    ? docRawText.slice(0, 6000) + '\n...[truncated]'
+    : docRawText;
+
+  const systemPrompt =
+    `You are an answer-key extractor for school quiz documents. ` +
+    `Your ONLY job is to find the correct answer for each question listed. ` +
+    `Look for the answer in the document text: it may be indicated by an answer key section, ` +
+    `inline annotations (e.g. "Ans: B"), bold/underlined text descriptions, or any other marker. ` +
+    `If the document contains NO indication for a particular question, use your subject-matter ` +
+    `knowledge to choose the most likely correct answer from the options given. ` +
+    `ALWAYS return a valid JSON object and nothing else — no explanation, no markdown, no backticks. ` +
+    `Format: {"1":"opt_b","2":"opt_c",...}  where keys are question numbers and values are ` +
+    `opt_a, opt_b, opt_c, opt_d, or opt_e.`;
+
+  const userPrompt =
+    `FULL DOCUMENT TEXT (use this to find answer markers):\n` +
+    `---\n${contextText}\n---\n\n` +
+    `QUESTIONS NEEDING CORRECT ANSWER:\n\n${qList}\n\n` +
+    `Return ONLY a JSON object mapping each question number to its correct option ` +
+    `(opt_a / opt_b / opt_c / opt_d / opt_e). No other text.`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error('API error ' + response.status + ': ' + err.slice(0, 200));
+  }
+
+  const data = await response.json();
+
+  // Extract the text block from the response
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  if (!textBlock) throw new Error('No text in API response');
+
+  // Strip any accidental markdown fences and parse JSON
+  const raw = textBlock.text.trim().replace(/^```[a-z]*\n?/i,'').replace(/```$/,'').trim();
+  const parsed = JSON.parse(raw);
+
+  // Normalise: keys to integers, values to lowercase opt_x
+  const result = {};
+  for (const [k, v] of Object.entries(parsed)) {
+    const num = parseInt(k);
+    if (!isNaN(num) && typeof v === 'string') {
+      // Accept "opt_b", "B", "b", "2" etc.
+      let val = v.trim().toLowerCase();
+      if (/^opt_[a-e]$/.test(val)) {
+        result[num] = val;
+      } else if (/^[a-e]$/.test(val)) {
+        result[num] = 'opt_' + val;
+      } else if (/^[1-5]$/.test(val)) {
+        result[num] = 'opt_' + 'abcde'[parseInt(val)-1];
+      }
+      // else: ignore unrecognised value
+    }
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  STRUCTURAL PARSER  v5
+//  Improvements over v4:
+//   • harvestAK regex now accepts comma separator AND no-separator formats
+//     e.g. "1B 2C 3A" and "1,B  2,C" both work
+//   • isAnswerKeyLine: lower threshold (35% vs 45%) catches sparser keys
+//   • parseOptionLine: unchanged (solid)
+//   • Answer key also searched in plain text fallback
+// ═══════════════════════════════════════════════════════════════════════
+
+// Matches question line: "1. text" "1) text" "12.text" "3)text"
+const RE_Q = /^(\d{1,3})\s*[.)]\s*(.+)$/;
+
+// Answer key heading
+const RE_AK_HEAD  = /^\s*(answers?\s*key|answers?\s*:|ans\s*:)\s*$/i;
+const RE_AK_HEAD2 = /answers?\s*key|answers?\s*:/i;
+
+// ── harvestAK ──────────────────────────────────────────────────────────────
+// Accepts ALL these formats:
+//   1. B   1) B   1: B   1- B   1–B   1.B   1,B   1B   1 B
+// Strategy: \b number \s* optional-separator \s* letter \b
+// The separator is any of  . ) : - – ,  or nothing at all
+// We guard against false positives by requiring word-boundary on both sides
+function harvestAK(text, ak) {
+  // Primary: number + separator + letter  (all known separators including comma)
+  const re1 = /\b(\d{1,3})\s*[.):\-,\u2013\u2014]\s*([A-Ea-e])\b/gi;
+  let m;
+  while ((m = re1.exec(text)) !== null) {
+    ak[parseInt(m[1])] = m[2].toUpperCase();
+  }
+  // Secondary: number immediately followed by letter with NO separator, e.g. "1B 2C"
+  // Only do this if the primary didn't already find this number
+  const re2 = /\b(\d{1,3})([A-Ea-e])\b/g;
+  while ((m = re2.exec(text)) !== null) {
+    const n = parseInt(m[1]);
+    if (!ak[n]) ak[n] = m[2].toUpperCase();
+  }
+}
+
+function isAnswerKeyLine(text) {
+  // Count how many num→letter pairs are packed in this line
+  const pairs = text.match(/\b\d{1,3}\s*[.):\-,\u2013\u2014]?\s*[A-Ea-e]\b/gi) || [];
+  if (pairs.length < 2) return false;
+  const matchedLen = pairs.reduce((s,p)=>s+p.replace(/\s/g,'').length, 0);
+  const totalLen   = text.replace(/\s/g,'').length;
+  // Lower threshold: 35% (vs old 45%) so sparse lines like "1. B  2. C  3. A" still match
+  return totalLen > 0 && (matchedLen / totalLen) >= 0.35;
+}
+
+// ── parseOptionLine ────────────────────────────────────────────────────────
+// Unchanged from v4 — solid character-scan approach, no lookbehind
+function parseOptionLine(line) {
+  const positions = [];
+  const len = line.length;
+  let i = 0;
+  while (i < len) {
+    let j = i;
+    while (j < len && line[j] === ' ') j++;
+    if (j >= len) break;
+    let hasParen = false, k = j;
+    if (line[k] === '(') { hasParen = true; k++; }
+    if (k >= len) { i++; continue; }
+    const lc = line[k].toLowerCase();
+    if (lc < 'a' || lc > 'e') { i++; continue; }
+    const letter = line[k].toUpperCase();
+    k++;
+    if (hasParen) {
+      if (k >= len || line[k] !== ')') { i++; continue; }
+      k++;
+      if (k >= len || line[k] !== ' ') { i++; continue; }
+      while (k < len && line[k] === ' ') k++;
+      positions.push({ letter, textStart: k, labelStart: j });
+      i = k;
+    } else {
+      if (k >= len) { i++; continue; }
+      const sep = line[k];
+      if (sep === ')' || sep === '.' || sep === '-' || sep === '\u2013' || sep === '\u2014') {
+        k++;
+        if (k >= len || line[k] !== ' ') { i++; continue; }
+        while (k < len && line[k] === ' ') k++;
+        positions.push({ letter, textStart: k, labelStart: j });
+        i = k;
+      } else if (sep === ' ' && j === 0 && positions.length === 0) {
+        while (k < len && line[k] === ' ') k++;
+        positions.push({ letter, textStart: k, labelStart: j });
+        i = k;
+      } else { i++; }
+    }
+  }
+  if (positions.length === 0) return null;
+  const opts = [];
+  for (let p = 0; p < positions.length; p++) {
+    const start = positions[p].textStart;
+    const end   = p+1 < positions.length ? positions[p+1].labelStart : len;
+    const text  = line.slice(start, end).trim();
+    if (text.length > 0) opts.push({ letter: positions[p].letter, text });
+  }
+  return opts.length > 0 ? opts : null;
+}
+
+function getUnderlined(el) {
+  return Array.from(el.querySelectorAll('u'))
+    .map(u => u.textContent.trim()).filter(s => s.length > 0);
+}
+
+// Also detect bold text as a possible correct-answer marker
+function getBolded(el) {
+  return Array.from(el.querySelectorAll('strong, b'))
+    .map(b => b.textContent.trim()).filter(s => s.length > 0);
+}
+
+function optMatchesMarked(optText, marked) {
+  const o = optText.trim().toLowerCase();
+  const m = marked.trim().toLowerCase();
+  if (!o || !m) return false;
+  if (o === m) return true;
+  if (o.startsWith(m)) return true;
+  if (m.startsWith(o)) return true;
+  if (m.includes(o) && o.length >= 3) return true;
+  if (o.length >= 4 && m.startsWith(o.slice(0, Math.min(o.length, 12)))) return true;
+  return false;
+}
+
+// ── Main parseDocument ─────────────────────────────────────────────────────
+function parseDocument(html, rawText) {
+  const dom   = new DOMParser().parseFromString(html, 'text/html');
+  const nodes = Array.from(dom.querySelectorAll('p, li'));
+
+  /* PASS 1 – harvest answer key from HTML paragraphs */
+  const ak = {};
+  let inAK = false;
+  for (const el of nodes) {
+    const t = el.textContent.trim();
+    if (!t) continue;
+    if (RE_AK_HEAD.test(t))  { inAK = true; continue; }
+    if (RE_AK_HEAD2.test(t)) { inAK = true; harvestAK(t, ak); continue; }
+    if (inAK || isAnswerKeyLine(t)) { harvestAK(t, ak); }
+  }
+
+  /* PASS 1b – also harvest answer key from raw plain text
+     (catches cases where mammoth splits lines differently) */
+  if (rawText) {
+    const rawLines = rawText.split(/\r?\n/);
+    let inAKRaw = false;
+    for (const line of rawLines) {
+      const t = line.trim();
+      if (!t) continue;
+      if (RE_AK_HEAD.test(t))  { inAKRaw = true; continue; }
+      if (RE_AK_HEAD2.test(t)) { inAKRaw = true; harvestAK(t, ak); continue; }
+      if (inAKRaw || isAnswerKeyLine(t)) { harvestAK(t, ak); }
+    }
+  }
+
+  /* PASS 2 – parse questions and options */
+  const questions = [];
+  let curQ    = null;
+  let passage = [];
+  let inAK2   = false;
+
+  function saveQ() { if (curQ) { questions.push(curQ); curQ = null; } }
+  function makeQ(num, qtext) {
+    return { num, question: qtext, opts:['','','','',''], correct:'' };
+  }
+
+  for (const el of nodes) {
+    const rawText2  = el.textContent.trim();
+    if (!rawText2) continue;
+
+    const underlined = getUnderlined(el);
+    const bolded     = getBolded(el);
+    // Combine underline + bold as "marked correct" signals
+    const marked = [...underlined, ...bolded];
+
+    // Track AK section
+    if (RE_AK_HEAD.test(rawText2))  { inAK2 = true; continue; }
+    if (RE_AK_HEAD2.test(rawText2)) { inAK2 = true; continue; }
+
+    // Skip pure answer-key lines
+    if (inAK2 && !RE_Q.test(rawText2) && !parseOptionLine(rawText2)) continue;
+    if (!inAK2 && isAnswerKeyLine(rawText2) && !RE_Q.test(rawText2)) continue;
+
+    // Is this a question line?
+    const qm = rawText2.match(RE_Q);
+    if (qm) {
+      saveQ();
+      let qtext = qm[2].trim();
+      if (passage.length > 0) {
+        qtext = passage.join(' ') + '  ' + qtext;
+        passage = [];
+      }
+      curQ = makeQ(parseInt(qm[1]), qtext);
+      continue;
+    }
+
+    // Is this an option line?
+    if (curQ) {
+      const opts = parseOptionLine(rawText2);
+      if (opts && opts.length > 0) {
+        for (const {letter, text: optText} of opts) {
+          const idx = letter.charCodeAt(0) - 65;
+          if (idx < 0 || idx > 4) continue;
+          curQ.opts[idx] = optText;
+          // Check underline OR bold as correct marker
+          if (!curQ.correct) {
+            for (const marker of marked) {
+              if (optMatchesMarked(optText, marker)) {
+                curQ.correct = 'opt_' + letter.toLowerCase();
+                break;
+              }
+            }
+          }
+        }
+        continue;
+      }
+      // Continuation of question body (no options yet)
+      if (!curQ.opts.some(o => o !== '')) {
+        curQ.question += ' ' + rawText2;
+      }
+      continue;
+    }
+
+    // Before any question: accumulate as passage
+    if (!isAnswerKeyLine(rawText2)) {
+      passage.push(rawText2);
+    }
+  }
+  saveQ();
+
+  questions._ak = ak;
+  return questions;
+}
+
+/* PASS 3 – fill from structural answer key */
+function fillAnswerKey(rows) {
+  const ak = rows._ak || {};
+  for (const r of rows) {
+    if (!r.correct && ak[r.num]) {
+      r.correct = 'opt_' + ak[r.num].toLowerCase();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CSV BUILDER
+// ═══════════════════════════════════════════════════════════════════════
+function buildCsv(rows, qType, qLevel) {
+  const hdr = ['Serial number','Question type','Level','Question',
+               'opt_a','opt_b','opt_c','opt_d','opt_e','correct'];
+  const lines = [hdr.map(csvCell).join(',')];
+  rows.forEach((r,i) => {
+    lines.push([
+      i+1, qType, qLevel, r.question,
+      r.opts[0], r.opts[1], r.opts[2], r.opts[3], r.opts[4],
+      r.correct
+    ].map(csvCell).join(','));
+  });
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function csvCell(v) {
+  const s = String(v == null ? '' : v);
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return '"' + s.replace(/"/g,'""') + '"';
+  }
+  return s;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PREVIEW TABLE
+// ═══════════════════════════════════════════════════════════════════════
+function renderPreview(rows, qType, qLevel) {
+  const tbl = document.getElementById('previewTable');
+  const n   = Math.min(rows.length, 20);
+  document.getElementById('previewCount').textContent = 'showing '+n+' of '+rows.length;
+  let html = '<thead><tr><th>#</th><th>Type</th><th>Level</th><th>Question</th>'
+    + '<th>opt_a</th><th>opt_b</th><th>opt_c</th><th>opt_d</th><th>opt_e</th><th>Correct</th>'
+    + '</tr></thead><tbody>';
+  for (const r of rows.slice(0,n)) {
+    const q   = r.question.length>55 ? r.question.slice(0,52)+'...' : r.question;
+    const cor = r.correct
+      ? '<span class="correct-badge">'+esc(r.correct)+'</span>'
+      : '<span class="missing-badge">blank</span>';
+    html += '<tr>'
+      + '<td>'+r.num+'</td>'
+      + '<td>'+esc(qType)+'</td>'
+      + '<td>'+esc(qLevel)+'</td>'
+      + '<td class="q-cell" title="'+r.question.replace(/"/g,'&quot;')+'">'+esc(q)+'</td>'
+      + '<td class="opt-cell">'+esc(r.opts[0])+'</td>'
+      + '<td class="opt-cell">'+esc(r.opts[1])+'</td>'
+      + '<td class="opt-cell">'+esc(r.opts[2])+'</td>'
+      + '<td class="opt-cell">'+esc(r.opts[3])+'</td>'
+      + '<td class="opt-cell">'+esc(r.opts[4])+'</td>'
+      + '<td>'+cor+'</td>'
+      + '</tr>';
+  }
+  tbl.innerHTML = html + '</tbody>';
+}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════════════════════
+function readBuf(f){
+  // We need to read twice (HTML + text), so we must NOT consume the stream.
+  // Reading into ArrayBuffer and slicing gives us two independent reads.
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);
+    r.onerror=()=>rej(new Error('File read error'));
+    r.readAsArrayBuffer(f);
+  });
+}
+function setProgress(pct,txt){
+  progressFill.style.width=pct+'%';
+  progressPct.textContent=pct+'%';
+  if(txt)progressText.textContent=txt;
+}
+function setStep(n,state){
+  const el=document.getElementById('step'+n);
+  el.className='progress-step '+state;
+  el.querySelector('.step-icon').textContent=
+    state==='done'?'✅':state==='active'?'⚙️':'⏳';
+}
+function showError(msg){errorCard.textContent=msg;errorCard.classList.add('show');}
+function hideAll(){[progressWrap,resultCard,previewWrap,errorCard,warnCard].forEach(el=>el.classList.remove('show'));}
+</script>
+</body>
+</html>
